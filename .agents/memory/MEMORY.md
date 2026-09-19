@@ -1,0 +1,1 @@
+- [Tailwind source scope](tailwind-source-scope.md) — keep Tailwind v4 scanning limited to app source files to avoid stalled production builds.

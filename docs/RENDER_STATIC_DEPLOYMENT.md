@@ -25,19 +25,12 @@ Do not commit `.env`, `.env.local`, or any API keys.
 | Setting | Value |
 | --- | --- |
 | **Root Directory** | Leave blank |
-| **Build Command** | `bun install --frozen-lockfile && bun run build` |
+| **Build Command** | `npm install && npm run build` |
 | **Publish Directory** | `dist` |
 | **Auto-Deploy** | `Yes` |
 
-If the Render environment does not provide Bun, use the equivalent npm
-commands instead:
-
-```bash
-npm install
-npm run build
-```
-
-The publish directory remains `dist`.
+The publish directory is `dist`. Using npm here keeps the Render build
+independent of Replit's local Bun package mirror.
 
 ## 3. Configure the SPA rewrite
 
@@ -84,7 +77,7 @@ then follow Render's DNS instructions. Keep HTTPS enabled.
 With auto-deploy enabled, pushing to the selected branch triggers:
 
 ```text
-bun install --frozen-lockfile && bun run build
+npm install && npm run build
 ```
 
 Render then serves the fresh `dist/` output. If a deploy fails, inspect the
