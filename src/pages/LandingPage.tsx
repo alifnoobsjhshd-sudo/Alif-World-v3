@@ -18,6 +18,9 @@ export const LandingPage: React.FC = () => {
   const [isMuted, setIsMuted] = useState(false);
   const [isHoveringStory, setIsHoveringStory] = useState(false);
 
+  // Interactive Touch & Mouse Ripple State (Circle outline effect)
+  const [ripples, setRipples] = useState<Array<{ id: number; x: number; y: number }>>([]);
+
   // Mouse parallax state for living 3D feel
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
@@ -88,10 +91,32 @@ export const LandingPage: React.FC = () => {
     if (!next) dreamAudio.playPop();
   };
 
+  // ── Touch & Mouse Interactive Dream Ripple (Circle outline with sound) ─────
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    // Only accept primary left mouse click or touch events
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+
+    // Do not trigger background ripple when clicking action buttons
+    const target = e.target as HTMLElement;
+    if (target.closest('button') || target.closest('a') || target.closest('input')) {
+      return;
+    }
+    if (isZooming || isRocketLaunching) return;
+
+    const id = Date.now() + Math.random();
+    setRipples((prev) => [...prev.slice(-4), { id, x: e.clientX, y: e.clientY }]);
+    dreamAudio.playDreamRipple();
+
+    setTimeout(() => {
+      setRipples((prev) => prev.filter((r) => r.id !== id));
+    }, 950);
+  };
+
   return (
     <div
       ref={containerRef}
-      className="relative w-screen h-screen overflow-hidden select-none bg-[#b8b0b5] flex items-center justify-center"
+      onPointerDown={handlePointerDown}
+      className="relative w-screen h-screen overflow-hidden select-none bg-[#b8b0b5] flex items-center justify-center cursor-default"
     >
       <SEO
         title="Alif's World | The Dream & Sky Story"
@@ -357,6 +382,55 @@ export const LandingPage: React.FC = () => {
           </div>
         </div>
       </motion.div>
+
+      {/* ── INTERACTIVE TOUCH & MOUSE DREAM RIPPLES (Circle Outlines) ────────── */}
+      {ripples.map((rip) => (
+        <div
+          key={rip.id}
+          className="fixed pointer-events-none z-35 -translate-x-1/2 -translate-y-1/2"
+          style={{ left: rip.x, top: rip.y }}
+        >
+          {/* Central quick soft flash glint */}
+          <motion.div
+            initial={{ scale: 0.2, opacity: 1 }}
+            animate={{ scale: 1.5, opacity: 0 }}
+            transition={{ duration: 0.35, ease: 'easeOut' }}
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-white shadow-[0_0_12px_#38bdf8]"
+          />
+
+          {/* Primary dream sky circle outline ring */}
+          <motion.div
+            initial={{ scale: 0.12, opacity: 0.95 }}
+            animate={{ scale: 3.2, opacity: 0 }}
+            transition={{ duration: 0.85, ease: [0.16, 1, 0.3, 1] }}
+            className="w-20 sm:w-24 h-20 sm:h-24 rounded-full border-2 border-sky-400 shadow-[0_0_20px_rgba(56,189,248,0.7),inset_0_0_10px_rgba(255,255,255,0.7)]"
+          />
+
+          {/* Secondary warm golden dashed outline ring with gentle spin */}
+          <motion.div
+            initial={{ scale: 0.12, opacity: 0.85, rotate: 0 }}
+            animate={{ scale: 2.2, opacity: 0, rotate: 55 }}
+            transition={{ duration: 0.75, delay: 0.05, ease: 'easeOut' }}
+            className="absolute inset-0 w-20 sm:w-24 h-20 sm:h-24 rounded-full border-2 border-dashed border-amber-300"
+          />
+
+          {/* 4 delicate dream sparklets radiating outward */}
+          {[
+            { x: 0, y: -36, delay: 0 },
+            { x: 36, y: 0, delay: 0.03 },
+            { x: 0, y: 36, delay: 0.06 },
+            { x: -36, y: 0, delay: 0.09 },
+          ].map((sp, idx) => (
+            <motion.div
+              key={idx}
+              initial={{ x: 0, y: 0, scale: 0, opacity: 0.9 }}
+              animate={{ x: sp.x, y: sp.y, scale: [0, 1.2, 0], opacity: [0, 1, 0] }}
+              transition={{ duration: 0.65, delay: sp.delay, ease: 'easeOut' }}
+              className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-amber-200 shadow-[0_0_6px_#fde047]"
+            />
+          ))}
+        </div>
+      ))}
 
       {/* ── CARTOON CLOUD TRANSITION (Billows out when "Let's Watch a Story" is clicked) ── */}
       <CartoonCloudTransition isActive={isZooming} />

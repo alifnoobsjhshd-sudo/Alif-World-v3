@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   motion,
   useSpring,
@@ -13,7 +13,134 @@ interface PaperAirplaneProps {
   smoothedDepth:  MotionValue<number>;
 }
 
+interface TrailingParticle {
+  id: string;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  size: number;
+  scale: number;
+  opacity: number;
+  duration: number;
+  background: string;
+  boxShadow?: string;
+  filter?: string;
+}
+
 export const PaperAirplane = React.memo(({ scrollVelocity, smoothedDepth }: PaperAirplaneProps) => {
+  // ── Trailing Particle State ───────────────────────────────────────────────
+  const [particles, setParticles] = useState<TrailingParticle[]>([]);
+  const idleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastEmitTimeRef = useRef<number>(0);
+
+  // ── Emit particles only when actively scrolling & clear immediately when velocity hits zero ──
+  useEffect(() => {
+    const VELOCITY_THRESHOLD = 12;
+
+    const unsubscribe = scrollVelocity.on('change', (v: number) => {
+      const absV = Math.abs(v);
+
+      if (idleTimeoutRef.current) {
+        clearTimeout(idleTimeoutRef.current);
+        idleTimeoutRef.current = null;
+      }
+
+      // Immediately clear all trailing particles when scroll velocity reaches zero (or threshold)
+      if (absV <= VELOCITY_THRESHOLD) {
+        setParticles([]);
+        return;
+      }
+
+      // Active scrolling: emit particles at smooth throttled cadence
+      const now = performance.now();
+      if (now - lastEmitTimeRef.current >= 45) {
+        lastEmitTimeRef.current = now;
+
+        const isScrollForward = v > 0;
+        const speedRatio = Math.min(1.5, Math.max(0.6, absV / 600));
+
+        // Choose spawn location: Left wingtip, right wingtip, or center trailing wake
+        const spawnType = Math.random();
+        let spawnX = 0;
+        let spawnY = 44;
+        let driftX = (Math.random() - 0.5) * 14;
+        let size = 5 + Math.random() * 6;
+        let particleType = 'cloud';
+
+        if (spawnType < 0.38) {
+          // Left wingtip vortex
+          spawnX = -72 + (Math.random() * 8 - 4);
+          spawnY = 22 + Math.random() * 8;
+          driftX = -12 - Math.random() * 16;
+          particleType = 'vortex';
+        } else if (spawnType < 0.76) {
+          // Right wingtip vortex
+          spawnX = 72 + (Math.random() * 8 - 4);
+          spawnY = 22 + Math.random() * 8;
+          driftX = 12 + Math.random() * 16;
+          particleType = 'vortex';
+        } else {
+          // Center trailing slipstream
+          spawnX = (Math.random() - 0.5) * 28;
+          spawnY = 42 + Math.random() * 10;
+          driftX = (Math.random() - 0.5) * 20;
+          particleType = Math.random() > 0.4 ? 'cloud' : 'sparkle';
+        }
+
+        const driftY = (isScrollForward ? 25 : -20) + (Math.random() * 20 - 10);
+        const baseOpacity = Math.min(0.85, 0.4 + (absV / 1000) * 0.4);
+
+        let background = 'radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(224,242,254,0.6) 60%, transparent 100%)';
+        let boxShadow: string | undefined = '0 0 8px rgba(186, 230, 253, 0.6)';
+        let filter: string | undefined = 'blur(1.2px)';
+
+        if (particleType === 'sparkle') {
+          size = 3.5 + Math.random() * 2.5;
+          background = '#ffffff';
+          boxShadow = '0 0 6px rgba(56, 189, 248, 0.9)';
+          filter = undefined;
+        } else if (particleType === 'vortex') {
+          size = 4 + Math.random() * 4;
+          background = 'radial-gradient(circle, rgba(240,249,255,0.9) 0%, rgba(186,230,253,0.5) 70%, transparent 100%)';
+          boxShadow = '0 0 6px rgba(125, 211, 252, 0.5)';
+          filter = 'blur(0.8px)';
+        }
+
+        const newParticle: TrailingParticle = {
+          id: `${now}-${Math.random()}`,
+          x: spawnX,
+          y: spawnY,
+          vx: driftX * speedRatio,
+          vy: driftY * speedRatio,
+          size,
+          scale: 0.8 + Math.random() * 0.5,
+          opacity: baseOpacity,
+          duration: 0.38 + Math.random() * 0.18,
+          background,
+          boxShadow,
+          filter,
+        };
+
+        setParticles((prev) => {
+          // Keep up to 22 particles maximum for lightning fast rendering
+          return [...prev.slice(-21), newParticle];
+        });
+      }
+
+      // Idle timeout: if velocity stops changing / settles to zero, wipe immediately
+      idleTimeoutRef.current = setTimeout(() => {
+        setParticles([]);
+      }, 75);
+    });
+
+    return () => {
+      unsubscribe();
+      if (idleTimeoutRef.current) {
+        clearTimeout(idleTimeoutRef.current);
+      }
+    };
+  }, [scrollVelocity]);
 
   // ── Intensity Modulation ──────────────────────────────────────────────────
   // Keep the plane's motion visible at rest, but let a controlled amount of
@@ -76,6 +203,40 @@ export const PaperAirplane = React.memo(({ scrollVelocity, smoothedDepth }: Pape
           willChange: 'transform',
         }}
       >
+        {/* ── Trailing Particle Wake (Emitted only during active scroll, cleared immediately at 0 velocity) ── */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-0 h-0 pointer-events-none z-[-1]">
+          {particles.map((p) => (
+            <motion.div
+              key={p.id}
+              initial={{
+                opacity: p.opacity,
+                scale: p.scale * 0.7,
+                x: p.x,
+                y: p.y,
+              }}
+              animate={{
+                opacity: 0,
+                scale: p.scale * 1.35,
+                x: p.x + p.vx,
+                y: p.y + p.vy,
+              }}
+              transition={{
+                duration: p.duration,
+                ease: 'easeOut',
+              }}
+              className="absolute rounded-full pointer-events-none"
+              style={{
+                width: `${p.size}px`,
+                height: `${p.size}px`,
+                background: p.background,
+                boxShadow: p.boxShadow,
+                filter: p.filter,
+                transform: 'translate(-50%, -50%)',
+              }}
+            />
+          ))}
+        </div>
+
         {/* Plane body — Dynamic 3D rotation based on swerve position */}
         <motion.div
           onClick={() => dreamAudio.playPaperPlaneFlutter()}
@@ -100,7 +261,7 @@ export const PaperAirplane = React.memo(({ scrollVelocity, smoothedDepth }: Pape
             }}
             style={{ transformOrigin: '50% 50%', willChange: 'transform' }}
           >
-            <AirplaneSVG />
+            <AirplaneDesign />
           </motion.div>
         </motion.div>
 
@@ -137,137 +298,19 @@ export const PaperAirplane = React.memo(({ scrollVelocity, smoothedDepth }: Pape
 PaperAirplane.displayName = 'PaperAirplane';
 
 /* ─────────────────────────────────────────────────────────────────────────────
- * Paper airplane SVG - Reduced Size
+ * Crafted Paper Airplane Design Overlay
  * ───────────────────────────────────────────────────────────────────────── */
-const AirplaneSVG = React.memo(() => (
-  <svg
-    width="180"
-    height="105"
-    viewBox="0 0 500 290"
-    fill="none"
-    xmlns="http://www.w3.org/2000/svg"
-    style={{ display: 'block', overflow: 'visible' }}
-  >
-    <defs>
-      {/* Soft drop shadow applied to the whole group */}
-      <filter id="pDs" x="-18%" y="-18%" width="136%" height="136%">
-        <feDropShadow dx="0" dy="10" stdDeviation="14" floodColor="#1e2840" floodOpacity="0.22" />
-      </filter>
+const AIRPLANE_IMAGE_URL = 'https://i.postimg.cc/k5V1LWLF/Gemini-Generated-Image-removebg-preview.png';
 
-      {/* Left wing gradient — brighter near spine */}
-      <linearGradient id="pLw" x1="250" y1="130" x2="10" y2="195" gradientUnits="userSpaceOnUse">
-        <stop offset="0%"   stopColor="#edf2f8" />
-        <stop offset="55%"  stopColor="#dde2ec" />
-        <stop offset="100%" stopColor="#d0d6e2" />
-      </linearGradient>
-
-      {/* Right wing gradient — slightly darker */}
-      <linearGradient id="pRw" x1="250" y1="130" x2="490" y2="195" gradientUnits="userSpaceOnUse">
-        <stop offset="0%"   stopColor="#e4e9f4" />
-        <stop offset="55%"  stopColor="#ced4e0" />
-        <stop offset="100%" stopColor="#c0c6d4" />
-      </linearGradient>
-
-      {/* Left fold wall — clearly dark */}
-      <linearGradient id="pLf" x1="228" y1="16" x2="208" y2="282" gradientUnits="userSpaceOnUse">
-        <stop offset="0%"   stopColor="#7a7f8c" />
-        <stop offset="100%" stopColor="#525660" />
-      </linearGradient>
-
-      {/* Right fold wall — darkest */}
-      <linearGradient id="pRf" x1="272" y1="16" x2="292" y2="282" gradientUnits="userSpaceOnUse">
-        <stop offset="0%"   stopColor="#6a6f7c" />
-        <stop offset="100%" stopColor="#464a54" />
-      </linearGradient>
-
-      {/* Spine — white fading to translucent at tail */}
-      <linearGradient id="pSp" x1="250" y1="16" x2="250" y2="282" gradientUnits="userSpaceOnUse">
-        <stop offset="0%"   stopColor="white" stopOpacity="1"    />
-        <stop offset="70%"  stopColor="white" stopOpacity="0.90" />
-        <stop offset="100%" stopColor="white" stopOpacity="0.44" />
-      </linearGradient>
-
-      {/* Wing-tip highlight sheen */}
-      <linearGradient id="pSh" x1="0" y1="0" x2="1" y2="0" gradientUnits="objectBoundingBox">
-        <stop offset="0%"   stopColor="white" stopOpacity="0.38" />
-        <stop offset="100%" stopColor="white" stopOpacity="0"    />
-      </linearGradient>
-    </defs>
-
-    <g filter="url(#pDs)">
-
-      {/* ── LEFT WING ─────────────────────────────────────────────────────── */}
-      <path
-        d="M 250,16 L 8,192 L 168,280 L 208,280 Z"
-        fill="url(#pLw)"
-        stroke="#bec4d0"
-        strokeWidth="1.4"
-        strokeLinejoin="round"
-      />
-      {/* Leading-edge sheen */}
-      <path
-        d="M 250,16 L 8,192"
-        stroke="#e8edf6"
-        strokeWidth="3.2"
-        strokeLinecap="round"
-        opacity="0.9"
-      />
-
-      {/* ── RIGHT WING ────────────────────────────────────────────────────── */}
-      <path
-        d="M 250,16 L 292,280 L 332,280 L 492,192 Z"
-        fill="url(#pRw)"
-        stroke="#b0b6c4"
-        strokeWidth="1.4"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M 250,16 L 492,192"
-        stroke="#c8cedc"
-        strokeWidth="3.2"
-        strokeLinecap="round"
-        opacity="0.74"
-      />
-
-      {/* ── LEFT FOLD WALL ────────────────────────────────────────────────── */}
-      <path d="M 250,16 L 208,280 L 250,280 Z" fill="url(#pLf)" />
-
-      {/* ── RIGHT FOLD WALL ───────────────────────────────────────────────── */}
-      <path d="M 250,16 L 250,280 L 292,280 Z" fill="url(#pRf)" />
-
-      {/* ── CREASE LINES ──────────────────────────────────────────────────── */}
-      <line x1="250" y1="16" x2="208" y2="280" stroke="#9ca4b4" strokeWidth="1.4" strokeLinecap="round" opacity="0.72" />
-      <line x1="250" y1="16" x2="292" y2="280" stroke="#8c94a4" strokeWidth="1.4" strokeLinecap="round" opacity="0.62" />
-
-      {/* ── TRAILING EDGE ─────────────────────────────────────────────────── */}
-      <path
-        d="M 8,192 L 168,280 L 332,280 L 492,192"
-        stroke="#9ea4b4"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-        opacity="0.50"
-      />
-
-      {/* ── INNER WING CREASE TEXTURE ─────────────────────────────────────── */}
-      <line x1="110" y1="164" x2="236" y2="60"  stroke="#c0c6d4" strokeWidth="1.1" opacity="0.50" />
-      <line x1="62"  y1="178" x2="232" y2="114" stroke="#c0c6d4" strokeWidth="0.8" opacity="0.34" />
-      <line x1="390" y1="164" x2="264" y2="60"  stroke="#a8aeb8" strokeWidth="1.1" opacity="0.44" />
-      <line x1="438" y1="178" x2="268" y2="114" stroke="#a8aeb8" strokeWidth="0.8" opacity="0.28" />
-
-      {/* ── SPINE RIDGE ───────────────────────────────────────────────────── */}
-      <line
-        x1="250" y1="16" x2="250" y2="280"
-        stroke="url(#pSp)"
-        strokeWidth="4"
-        strokeLinecap="round"
-      />
-
-      {/* ── NOSE TIP GLINT ────────────────────────────────────────────────── */}
-      <circle cx="250" cy="16" r="5" fill="white" opacity="0.98" />
-      <circle cx="250" cy="16" r="2" fill="white" opacity="1" />
-    </g>
-  </svg>
+const AirplaneDesign = React.memo(() => (
+  <div className="relative flex items-center justify-center select-none pointer-events-none">
+    <img
+      src={AIRPLANE_IMAGE_URL}
+      alt="Paper Airplane"
+      referrerPolicy="no-referrer"
+      className="w-[195px] sm:w-[230px] h-auto object-contain select-none pointer-events-none drop-shadow-[0_14px_28px_rgba(20,30,55,0.28)]"
+      loading="eager"
+    />
+  </div>
 ));
-AirplaneSVG.displayName = 'AirplaneSVG';
+AirplaneDesign.displayName = 'AirplaneDesign';

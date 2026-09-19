@@ -18,24 +18,24 @@ export const Section = React.memo(({
   });
 
   // Smooth perspective depth and scale curves
-  const z = useTransform(relativeDepth, [-1400, 0, 3800], [380, 0, -2200]);
-  const scale = useTransform(relativeDepth, [-1400, 0, 3800], [1.08, 1, 0.25]);
+  const z = useTransform(relativeDepth, [-1200, 0, 2400], [360, 0, -2000]);
+  const scale = useTransform(relativeDepth, [-1200, 0, 2400], [1.06, 1, 0.32]);
 
   // High-clarity opacity curve
   const opacity = useTransform(
     relativeDepth,
-    [-1400, -800, -250, 0, 250, 1400, 2800, 3800],
-    [0, 0.3, 0.96, 1, 0.96, 0.65, 0.15, 0]
+    [-900, -500, -180, 0, 180, 700, 1200],
+    [0, 0.3, 0.96, 1, 0.96, 0.35, 0]
   );
 
   // Enable interaction only when scene is in foreground focus
   const pointerEvents = useTransform(relativeDepth, (val) => {
-    return Math.abs(val) < 700 ? 'auto' : 'none';
+    return Math.abs(val) < 600 ? 'auto' : 'none';
   });
 
-  // Occlusion culling: completely skip off-screen rendering without triggering layout reflows
+  // Occlusion culling: completely skip off-screen rendering when far away
   const visibility = useTransform(relativeDepth, (val) => {
-    return (val < -1600 || val > 4200) ? 'hidden' : 'visible';
+    return (val < -1000 || val > 1300) ? 'hidden' : 'visible';
   });
 
   return (

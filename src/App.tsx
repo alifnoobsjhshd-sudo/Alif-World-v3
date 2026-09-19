@@ -30,6 +30,7 @@ import { StoryContactModal } from './components/StoryContactModal';
 import { JourneyCloudOut } from './components/JourneyCloudOut';
 import { RocketLaunchTransition } from './components/RocketLaunchTransition';
 import { ExploreWorksPage } from './pages/ExploreWorksPage';
+import { NotAvailablePage } from './pages/NotAvailablePage';
 import { dreamAudio } from './utils/audio';
 
 const MAX_DEPTH = (STORY_SCENES.length - 1) * SCENE_STEP; // 15 * 3800 = 57,000
@@ -341,6 +342,8 @@ export default function App() {
         <Route path="/projects" element={<ProjectsPage initialLoading={initialLoading} />} />
         <Route path="/explore-works" element={<ExploreWorksPage />} />
         <Route path="/explore-work" element={<ExploreWorksPage />} />
+        <Route path="/not-available" element={<NotAvailablePage />} />
+        <Route path="/unavailable" element={<NotAvailablePage />} />
       </Routes>
     </>
   );

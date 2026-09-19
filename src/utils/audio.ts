@@ -480,7 +480,7 @@ class SkyAudioPlayer {
       if (this.sleepingMasterGain) {
         const now = this.ctx.currentTime;
         this.sleepingMasterGain.gain.cancelScheduledValues(now);
-        this.sleepingMasterGain.gain.linearRampToValueAtTime(this.isMuted ? 0.0 : 0.38, now + 1.0);
+        this.sleepingMasterGain.gain.linearRampToValueAtTime(this.isMuted ? 0.0 : 0.72, now + 1.0);
       }
       return;
     }
@@ -490,20 +490,20 @@ class SkyAudioPlayer {
     this.sleepMusicStartTime = now;
     this.lastScheduledNapBeat = -1;
 
-    // Master sleeping sound bus
+    // Master sleeping sound bus (increased volume for landing page)
     this.sleepingMasterGain = this.ctx.createGain();
     this.sleepingMasterGain.gain.setValueAtTime(0.001, now);
-    const targetVolume = this.isMuted ? 0.0 : 0.38;
+    const targetVolume = this.isMuted ? 0.0 : 0.72;
     this.sleepingMasterGain.gain.linearRampToValueAtTime(targetVolume, now + 2.0);
     this.sleepingMasterGain.connect(this.ctx.destination);
 
     // Sub-stems for careful mixing balance
     this.napStemMusic = this.ctx.createGain();
-    this.napStemMusic.gain.setValueAtTime(0.48, now); // Soft, cozy lo-fi lullaby
+    this.napStemMusic.gain.setValueAtTime(0.75, now); // Warm, comforting lo-fi lullaby
     this.napStemMusic.connect(this.sleepingMasterGain);
 
     this.napStemClock = this.ctx.createGain();
-    this.napStemClock.gain.setValueAtTime(0.18, now); // Gentle background clock tick
+    this.napStemClock.gain.setValueAtTime(0.24, now); // Gentle background clock tick
     this.napStemClock.connect(this.sleepingMasterGain);
 
     this.napStemBreath = this.ctx.createGain();
@@ -511,7 +511,7 @@ class SkyAudioPlayer {
     this.napStemBreath.connect(this.sleepingMasterGain);
 
     this.napStemAmbience = this.ctx.createGain();
-    this.napStemAmbience.gain.setValueAtTime(0.24, now); // Cozy room presence & breeze
+    this.napStemAmbience.gain.setValueAtTime(0.30, now); // Cozy room presence & breeze
     this.napStemAmbience.connect(this.sleepingMasterGain);
 
     // 1. Cozy Bedroom Ambience (Warm quiet room tone + soft window breeze)
@@ -1598,11 +1598,45 @@ class SkyAudioPlayer {
     } catch {}
   }
 
+  // ── 7. AIRY CLOUD PARTING WHOOSH ──────────────────────────────────────────
+  public playCloudWhoosh(): void {
+    if (this.isMuted) return;
+    try {
+      this.initContext();
+      if (!this.ctx) return;
+      const now = this.ctx.currentTime;
+
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = this.getNoiseBuffer(this.ctx);
+
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(320, now);
+      filter.frequency.linearRampToValueAtTime(880, now + 0.6);
+      filter.frequency.exponentialRampToValueAtTime(220, now + 1.8);
+      filter.Q.value = 1.6;
+
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(0.001, now);
+      gain.gain.linearRampToValueAtTime(0.08, now + 0.5);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 2.0);
+
+      noise.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.ctx.destination);
+
+      noise.start(now);
+      noise.stop(now + 2.1);
+    } catch {}
+  }
+
   // ── SPACE & ROCKET AMBIENCE SYSTEM (EXPLORE WORKS) ───────────────────────
   private spaceMasterGain: GainNode | null = null;
   private isSpaceMusicRunning: boolean = false;
   private spaceDroneOscs: OscillatorNode[] = [];
   private spaceIntervalId: number | null = null;
+  private spacePadIntervalId: number | null = null;
+  private spaceWindSource: AudioBufferSourceNode | null = null;
   private lastFireblastTime: number = 0;
 
   // Toggle Mute
@@ -1618,12 +1652,12 @@ class SkyAudioPlayer {
       if (this.sleepingMasterGain) {
         this.sleepingMasterGain.gain.cancelScheduledValues(now);
         this.sleepingMasterGain.gain.setValueAtTime(this.sleepingMasterGain.gain.value, now);
-        this.sleepingMasterGain.gain.linearRampToValueAtTime(this.isMuted ? 0.0 : 0.38, now + 0.3);
+        this.sleepingMasterGain.gain.linearRampToValueAtTime(this.isMuted ? 0.0 : 0.72, now + 0.3);
       }
       if (this.spaceMasterGain) {
         this.spaceMasterGain.gain.cancelScheduledValues(now);
         this.spaceMasterGain.gain.setValueAtTime(this.spaceMasterGain.gain.value, now);
-        this.spaceMasterGain.gain.linearRampToValueAtTime(this.isMuted ? 0.0 : 0.42, now + 0.3);
+        this.spaceMasterGain.gain.linearRampToValueAtTime(this.isMuted ? 0.0 : 0.55, now + 0.3);
       }
     }
     return this.isMuted;
@@ -1787,37 +1821,129 @@ class SkyAudioPlayer {
   public startSpaceAmbientMusic(): void {
     this.initContext();
     if (!this.ctx) return;
-    if (this.isSpaceMusicRunning) return;
+    if (this.ctx.state === 'suspended') {
+      this.ctx.resume().catch(() => {});
+    }
+    if (this.isSpaceMusicRunning) {
+      if (this.spaceMasterGain) {
+        const now = this.ctx.currentTime;
+        this.spaceMasterGain.gain.cancelScheduledValues(now);
+        this.spaceMasterGain.gain.linearRampToValueAtTime(this.isMuted ? 0.0 : 0.55, now + 1.0);
+      }
+      return;
+    }
     this.isSpaceMusicRunning = true;
 
     try {
       const now = this.ctx.currentTime;
       this.spaceMasterGain = this.ctx.createGain();
       this.spaceMasterGain.gain.setValueAtTime(0.001, now);
-      this.spaceMasterGain.gain.linearRampToValueAtTime(this.isMuted ? 0.0 : 0.36, now + 2.0);
+      this.spaceMasterGain.gain.linearRampToValueAtTime(this.isMuted ? 0.0 : 0.55, now + 2.0);
       this.spaceMasterGain.connect(this.ctx.destination);
 
-      // Deep Cosmic Drone (D Minor / F# Ethereal Cosmic Horizon)
-      const droneFrequencies = [55.0, 82.41, 110.0, 164.81, 220.0];
+      // 1. Deep Cosmic Drone (D Minor / Void Resonance: 55Hz, 73.4Hz, 110Hz, 146.8Hz, 220Hz)
+      const droneFrequencies = [55.0, 73.42, 110.0, 146.83, 220.0];
       droneFrequencies.forEach((freq, idx) => {
         if (!this.ctx || !this.spaceMasterGain) return;
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
         osc.type = idx % 2 === 0 ? 'sine' : 'triangle';
         osc.frequency.setValueAtTime(freq, now);
+        osc.detune.setValueAtTime((idx - 2) * 5, now);
 
-        // Gentle cosmic detune
-        osc.detune.setValueAtTime((idx - 2) * 4, now);
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(280, now);
 
-        gain.gain.setValueAtTime(0.04 / (idx + 1), now);
-        osc.connect(gain);
+        gain.gain.setValueAtTime(0.045 / (idx + 1), now);
+        osc.connect(filter);
+        filter.connect(gain);
         gain.connect(this.spaceMasterGain);
         osc.start(now);
         this.spaceDroneOscs.push(osc);
       });
 
-      // Shimmering Cosmic Starlight Pulses (generative periodic star chimes)
-      const starScale = [440, 523.25, 659.25, 783.99, 880, 1046.5, 1318.51];
+      // 2. Solar Wind / Cosmic Ether Ambience (gentle filtered atmospheric pink noise)
+      try {
+        const windNoise = this.ctx.createBufferSource();
+        windNoise.buffer = this.getNoiseBuffer(this.ctx);
+        windNoise.loop = true;
+
+        const windFilter = this.ctx.createBiquadFilter();
+        windFilter.type = 'bandpass';
+        windFilter.frequency.setValueAtTime(320, now);
+        windFilter.Q.value = 2.2;
+
+        const windLfo = this.ctx.createOscillator();
+        const windLfoGain = this.ctx.createGain();
+        windLfo.frequency.value = 0.12;
+        windLfoGain.gain.value = 160;
+        windLfo.connect(windLfoGain);
+        windLfoGain.connect(windFilter.frequency);
+
+        const windGain = this.ctx.createGain();
+        windGain.gain.setValueAtTime(0.038, now);
+
+        windNoise.connect(windFilter);
+        windFilter.connect(windGain);
+        windGain.connect(this.spaceMasterGain);
+
+        windNoise.start(now);
+        windLfo.start(now);
+        this.spaceWindSource = windNoise;
+      } catch {}
+
+      // 3. Ethereal Interstellar Polyphonic Pads (Atmospheric rotating chords)
+      const cosmicChords = [
+        [146.83, 220.0, 261.63, 329.63, 392.0], // Dm9
+        [116.54, 174.61, 220.0, 293.66, 349.23], // Bbmaj9
+        [87.31, 130.81, 174.61, 220.0, 261.63, 329.63], // Fmaj7
+        [110.0, 164.81, 196.0, 261.63, 329.63], // Am7
+      ];
+      let chordIndex = 0;
+      const playNextPadChord = () => {
+        if (!this.ctx || !this.spaceMasterGain || this.isMuted) return;
+        const chord = cosmicChords[chordIndex % cosmicChords.length];
+        chordIndex++;
+        const chordTime = this.ctx.currentTime;
+        const chordDuration = 6.2;
+
+        chord.forEach((freq, idx) => {
+          if (!this.ctx || !this.spaceMasterGain) return;
+          try {
+            const padOsc = this.ctx.createOscillator();
+            const padFilter = this.ctx.createBiquadFilter();
+            const padGain = this.ctx.createGain();
+
+            padOsc.type = 'triangle';
+            padOsc.frequency.setValueAtTime(freq, chordTime);
+            padOsc.detune.setValueAtTime((idx % 2 === 0 ? 1 : -1) * 4, chordTime);
+
+            padFilter.type = 'lowpass';
+            padFilter.frequency.setValueAtTime(450, chordTime);
+            padFilter.frequency.linearRampToValueAtTime(750, chordTime + 2.5);
+            padFilter.frequency.exponentialRampToValueAtTime(350, chordTime + chordDuration);
+
+            padGain.gain.setValueAtTime(0.001, chordTime);
+            padGain.gain.linearRampToValueAtTime(0.024, chordTime + 1.8);
+            padGain.gain.setValueAtTime(0.024, chordTime + chordDuration - 1.5);
+            padGain.gain.exponentialRampToValueAtTime(0.0001, chordTime + chordDuration);
+
+            padOsc.connect(padFilter);
+            padFilter.connect(padGain);
+            padGain.connect(this.spaceMasterGain);
+
+            padOsc.start(chordTime);
+            padOsc.stop(chordTime + chordDuration + 0.1);
+          } catch {}
+        });
+      };
+
+      playNextPadChord();
+      this.spacePadIntervalId = window.setInterval(playNextPadChord, 5800);
+
+      // 4. Shimmering Cosmic Starlight Pulses (generative celestial star chimes)
+      const starScale = [440, 523.25, 659.25, 783.99, 880, 1046.5, 1174.66, 1318.51];
       this.spaceIntervalId = window.setInterval(() => {
         if (!this.ctx || !this.spaceMasterGain || this.isMuted) return;
         const chimeFreq = starScale[Math.floor(Math.random() * starScale.length)];
@@ -1829,14 +1955,14 @@ class SkyAudioPlayer {
         chimeOsc.frequency.setValueAtTime(chimeFreq, chimeNow);
 
         chimeGain.gain.setValueAtTime(0.001, chimeNow);
-        chimeGain.gain.linearRampToValueAtTime(0.025, chimeNow + 0.08);
-        chimeGain.gain.exponentialRampToValueAtTime(0.0001, chimeNow + 1.8);
+        chimeGain.gain.linearRampToValueAtTime(0.035, chimeNow + 0.06);
+        chimeGain.gain.exponentialRampToValueAtTime(0.0001, chimeNow + 2.0);
 
         chimeOsc.connect(chimeGain);
         chimeGain.connect(this.spaceMasterGain);
         chimeOsc.start(chimeNow);
-        chimeOsc.stop(chimeNow + 1.9);
-      }, 1600);
+        chimeOsc.stop(chimeNow + 2.1);
+      }, 1400);
     } catch {}
   }
 
@@ -1847,6 +1973,18 @@ class SkyAudioPlayer {
     if (this.spaceIntervalId) {
       clearInterval(this.spaceIntervalId);
       this.spaceIntervalId = null;
+    }
+    if (this.spacePadIntervalId) {
+      clearInterval(this.spacePadIntervalId);
+      this.spacePadIntervalId = null;
+    }
+
+    if (this.spaceWindSource) {
+      try {
+        this.spaceWindSource.stop();
+        this.spaceWindSource.disconnect();
+      } catch {}
+      this.spaceWindSource = null;
     }
 
     if (this.ctx && this.spaceMasterGain) {
@@ -1871,6 +2009,175 @@ class SkyAudioPlayer {
         }
       }, fadeDuration * 1000 + 100);
     }
+  }
+
+  // ── SPACE SOUND EFFECTS ───────────────────────────────────────────────────
+
+  // Navigational Holographic Sector Ping (Arrival at Sector Waypoint)
+  public playSpaceSectorPing(): void {
+    if (this.isMuted) return;
+    this.initContext();
+    if (!this.ctx) return;
+    try {
+      const now = this.ctx.currentTime;
+      // High glass chime harmonic
+      const freqs = [1046.5, 1567.98, 2093.0];
+      freqs.forEach((f, idx) => {
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(f, now + idx * 0.05);
+
+        gain.gain.setValueAtTime(0.001, now + idx * 0.05);
+        gain.gain.linearRampToValueAtTime(0.045 / (idx + 1), now + idx * 0.05 + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.2);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now + idx * 0.05);
+        osc.stop(now + 1.3);
+      });
+    } catch {}
+  }
+
+  // Aerospace UI Tactile Beep (Clicking buttons, interactive links in Space)
+  public playCosmicBeep(): void {
+    if (this.isMuted) return;
+    this.initContext();
+    if (!this.ctx) return;
+    try {
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1480, now);
+      osc.frequency.exponentialRampToValueAtTime(1860, now + 0.06);
+
+      gain.gain.setValueAtTime(0.001, now);
+      gain.gain.linearRampToValueAtTime(0.05, now + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.13);
+    } catch {}
+  }
+
+  // Deep Space Gravitational Wave Pulse Sound (Interactive tap on space canvas)
+  public playGravitationalPulse(): void {
+    if (this.isMuted) return;
+    this.initContext();
+    if (!this.ctx) return;
+    try {
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, now);
+      osc.frequency.exponentialRampToValueAtTime(260, now + 0.42);
+
+      gain.gain.setValueAtTime(0.055, now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.65);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.68);
+    } catch {}
+  }
+
+  // Hyperdrive Warp Jump Sound (Accelerating through light barrier)
+  public playWarpJumpSound(): void {
+    if (this.isMuted) return;
+    this.initContext();
+    if (!this.ctx) return;
+    try {
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(140, now);
+      osc.frequency.exponentialRampToValueAtTime(1200, now + 0.65);
+
+      gain.gain.setValueAtTime(0.02, now);
+      gain.gain.linearRampToValueAtTime(0.12, now + 0.35);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.95);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 1.0);
+    } catch {}
+  }
+
+  // ── LANDING PAGE DREAM TOUCH / CLICK RIPPLE SOUND ─────────────────────────
+  public playDreamRipple(): void {
+    if (this.isMuted) return;
+    this.initContext();
+    if (!this.ctx) return;
+    try {
+      if (this.ctx.state === 'suspended') {
+        this.ctx.resume().catch(() => {});
+      }
+      const now = this.ctx.currentTime;
+
+      // 1. Soft melodic droplet / dream bell chime (Dual harmonic: D5 + A5)
+      const pitches = [587.33, 880.0];
+      pitches.forEach((freq, idx) => {
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const oscGain = this.ctx.createGain();
+        osc.type = 'sine';
+        // Subtle downward pitch swoop for gentle water/dream drop feel
+        osc.frequency.setValueAtTime(freq * 1.12, now + idx * 0.025);
+        osc.frequency.exponentialRampToValueAtTime(freq, now + idx * 0.025 + 0.08);
+
+        oscGain.gain.setValueAtTime(0.001, now + idx * 0.025);
+        oscGain.gain.linearRampToValueAtTime(0.055 / (idx + 1), now + idx * 0.025 + 0.02);
+        oscGain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.025 + 0.45);
+
+        osc.connect(oscGain);
+        oscGain.connect(this.ctx.destination);
+        osc.start(now + idx * 0.025);
+        osc.stop(now + idx * 0.025 + 0.48);
+      });
+
+      // 2. Gentle tactile puff (cloud/paper whisper underneath)
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = this.getNoiseBuffer(this.ctx);
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(1100, now);
+      filter.Q.value = 2.4;
+
+      const noiseGain = this.ctx.createGain();
+      noiseGain.gain.setValueAtTime(0.001, now);
+      noiseGain.gain.linearRampToValueAtTime(0.035, now + 0.015);
+      noiseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+
+      noise.connect(filter);
+      filter.connect(noiseGain);
+      noiseGain.connect(this.ctx.destination);
+      noise.start(now);
+      noise.stop(now + 0.18);
+
+      // 3. Subtle high sparkle bell overtone (D6 crystal shimmer)
+      const shimmer = this.ctx.createOscillator();
+      const shimmerGain = this.ctx.createGain();
+      shimmer.type = 'sine';
+      shimmer.frequency.setValueAtTime(1174.66, now + 0.02);
+
+      shimmerGain.gain.setValueAtTime(0.001, now + 0.02);
+      shimmerGain.gain.linearRampToValueAtTime(0.025, now + 0.04);
+      shimmerGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+
+      shimmer.connect(shimmerGain);
+      shimmerGain.connect(this.ctx.destination);
+      shimmer.start(now + 0.02);
+      shimmer.stop(now + 0.38);
+    } catch {}
   }
 }
 
