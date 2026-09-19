@@ -34,9 +34,9 @@ independent of Replit's local Bun package mirror.
 
 ## 3. Configure the SPA rewrite
 
-The app uses `react-router-dom` routes such as `/journey`, `/projects`, and
-`/explore-works`. Add this rewrite in the Render service under **Redirects /
-Rewrites**:
+The app uses `react-router-dom` routes such as `/journey`, `/space`,
+`/projects`, and `/explore-works`. Add this rewrite in the Render service
+under **Redirects / Rewrites**:
 
 | Source | Destination | Action |
 | --- | --- | --- |
@@ -63,7 +63,8 @@ Click **Create Static Site**. After the first deploy finishes, verify:
 
 1. The root URL opens and the loading transition completes.
 2. The `/journey` route loads when opened directly.
-3. The `/projects` and `/explore-works` routes load when opened directly.
+3. The `/space`, `/projects`, and `/explore-works` routes load when opened
+   directly.
 4. Browser refreshes on those routes do not return a 404.
 5. Images, fonts, and audio controls load over HTTPS.
 

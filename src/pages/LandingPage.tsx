@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { motion } from 'motion/react';
+import { motion, useMotionValue } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import { Sparkles, FolderGit2, Play, Volume2, VolumeX, ArrowRight } from 'lucide-react';
 import { SEO } from '../components/SEO';
@@ -21,8 +21,9 @@ export const LandingPage: React.FC = () => {
   // Interactive Touch & Mouse Ripple State (Circle outline effect)
   const [ripples, setRipples] = useState<Array<{ id: number; x: number; y: number }>>([]);
 
-  // Mouse parallax state for living 3D feel
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  // Motion values keep parallax updates off the React render path.
+  const mouseX = useMotionValue(0);
+  const mouseY = useMotionValue(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -30,12 +31,13 @@ export const LandingPage: React.FC = () => {
       const { innerWidth, innerHeight } = window;
       const x = (e.clientX / innerWidth - 0.5) * 16;
       const y = (e.clientY / innerHeight - 0.5) * 12;
-      setMousePos({ x, y });
+      mouseX.set(x * 0.4);
+      mouseY.set(y * 0.4);
     };
 
     window.addEventListener('mousemove', handleMouseMove, { passive: true });
     return () => window.removeEventListener('mousemove', handleMouseMove);
-  }, []);
+  }, [mouseX, mouseY]);
 
   // Start gentle sleeping sounds on landing page (boy asleep at study desk)
   useEffect(() => {
@@ -136,9 +138,11 @@ export const LandingPage: React.FC = () => {
 
       {/* ── CINEMATIC ZOOM CONTAINER (Slowly zooms directly into the character dream bubble) ── */}
       <motion.div
-        className="relative w-full h-full flex items-center justify-center overflow-hidden z-10"
+        className="relative w-full h-full flex items-center justify-center overflow-hidden z-10 transform-gpu will-change-transform"
         style={{
           transformOrigin: '50% 24%', // Focused precisely on the character's dream bubble
+          x: mouseX,
+          y: mouseY,
         }}
         animate={
           isZooming
@@ -152,8 +156,6 @@ export const LandingPage: React.FC = () => {
                 },
               }
             : {
-                x: mousePos.x * 0.4,
-                y: mousePos.y * 0.4,
                 scale: 1,
                 transition: { ease: 'easeOut', duration: 0.3 },
               }
